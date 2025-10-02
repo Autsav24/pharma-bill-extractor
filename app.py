@@ -154,20 +154,20 @@ if not df.empty:
     if role == "Reception/Staff":
         selected = st.selectbox("Select appointment ID to update", df["ID"].astype(str))
         if selected:
-            appt = df[df["ID"] == int(selected)].iloc[0]
+            appt = df[df["ID"].astype(str) == selected].iloc[0]
             action = st.radio("Action", ["Cancel", "Reschedule"])
             if action == "Cancel":
                 if st.button("❌ Cancel Appointment"):
-                    df.loc[df["ID"] == appt["ID"], "Status"] = "Cancelled"
+                    df.loc[df["ID"].astype(str) == selected, "Status"] = "Cancelled"
                     save_appointments(df)
                     st.success("Appointment cancelled")
             elif action == "Reschedule":
                 new_date = st.date_input("New Date", datetime.today())
                 new_time = st.time_input("New Time")
                 if st.button("🔄 Reschedule"):
-                    df.loc[df["ID"] == appt["ID"], "AppointmentDate"] = new_date.strftime("%Y-%m-%d")
-                    df.loc[df["ID"] == appt["ID"], "AppointmentTime"] = new_time.strftime("%H:%M")
-                    df.loc[df["ID"] == appt["ID"], "Status"] = "Rescheduled"
+                    df.loc[df["ID"].astype(str) == selected, "AppointmentDate"] = new_date.strftime("%Y-%m-%d")
+                    df.loc[df["ID"].astype(str) == selected, "AppointmentTime"] = new_time.strftime("%H:%M")
+                    df.loc[df["ID"].astype(str) == selected, "Status"] = "Rescheduled"
                     save_appointments(df)
                     st.success("Appointment rescheduled")
 
@@ -181,7 +181,7 @@ if role == "Doctor":
 
     if not df_today.empty:
         selected = st.selectbox("Select appointment ID", df_today["ID"].astype(str))
-        appt = df_today[df_today["ID"] == int(selected)].iloc[0]
+        appt = df_today[df_today["ID"].astype(str) == selected].iloc[0]
         doctor_notes = st.text_area("Enter prescription / notes")
         if st.button("💊 Save Prescription"):
             pdf_file = save_prescription_pdf(appt, doctor_notes)
