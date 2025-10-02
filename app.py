@@ -53,13 +53,13 @@ role = st.radio("👥 Select Role", ["Patient", "Reception/Staff", "Doctor"])
 # ---------- Passwords ----------
 if role == "Reception/Staff":
     pw = st.text_input("Enter Staff Password", type="password")
-    if pw != "staff123":
+    if pw != "1":
         st.warning("🔒 Enter valid Staff password to continue")
         st.stop()
 
 if role == "Doctor":
     pw = st.text_input("Enter Doctor Password", type="password")
-    if pw != "doctor123":
+    if pw != "1":
         st.warning("🔒 Enter valid Doctor password to continue")
         st.stop()
 
@@ -257,3 +257,4 @@ if role == "Doctor":
                 st.dataframe(history[show_cols], use_container_width=True)
             else:
                 st.info("No past history found for this patient.")
+
