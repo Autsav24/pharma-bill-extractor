@@ -1,8 +1,5 @@
 streamlit
-easyocr==1.7.1
-torch==2.0.1
-torchvision==0.15.2
-opencv-python-headless
+google-cloud-vision
 pillow
 pandas
 openpyxl
