@@ -1,7 +1,6 @@
 streamlit
 paddleocr
-opencv-python
+paddlepaddle
 pillow
 pandas
-
 openpyxl
