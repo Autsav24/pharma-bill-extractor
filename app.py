@@ -25,11 +25,25 @@ def wa_link(number: str, text: str) -> str:
 
 def load_appointments() -> pd.DataFrame:
     if os.path.exists(APPOINTMENT_FILE):
-        return pd.read_excel(APPOINTMENT_FILE)
-    return pd.DataFrame(columns=[
-        "Name","Age","Gender","Mobile",
-        "AppointmentDate","AppointmentTime","Doctor","Notes","Status","BookedOn"
-    ])
+        df = pd.read_excel(APPOINTMENT_FILE)
+
+        # Ensure all required columns exist
+        required_cols = [
+            "Name","Age","Gender","Mobile",
+            "AppointmentDate","AppointmentTime",
+            "Doctor","Notes","Status","BookedOn"
+        ]
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = "" if col != "Status" else "Booked"
+
+        return df
+    else:
+        return pd.DataFrame(columns=[
+            "Name","Age","Gender","Mobile",
+            "AppointmentDate","AppointmentTime","Doctor",
+            "Notes","Status","BookedOn"
+        ])
 
 def save_appointments(df: pd.DataFrame):
     df.to_excel(APPOINTMENT_FILE, index=False)
@@ -137,7 +151,7 @@ if not df.empty:
     doctor_colors = {"Dr. Ankur Poddar": "#3b82f6"}
     events = []
     for _, row in df.iterrows():
-        if row["Status"] != "Cancelled":
+        if str(row["Status"]) != "Cancelled":
             events.append({
                 "title": f"{row['Name']} ({row['Doctor']})",
                 "start": f"{row['AppointmentDate']}T{row['AppointmentTime']}:00",
