@@ -195,13 +195,30 @@ if role == "Reception/Staff":
     st.subheader("🗑 Delete Appointment")
     df = load_appointments()
     if not df.empty:
-        del_choice = st.selectbox("Select Appointment to Delete", df["ID"].astype(str) + " - " + df["Name"])
-        if del_choice:
-            del_id = int(del_choice.split(" - ")[0])
-            if st.button("⚠️ Confirm Delete"):
-                df = df[df["ID"] != del_id]
+        st.dataframe(df, use_container_width=True)
+
+        selected = st.selectbox("Select appointment to update/delete", df["ID"].astype(str))
+        appt = df[df["ID"].astype(str) == selected].iloc[0]
+
+        action = st.radio("Action", ["Cancel", "Reschedule", "Delete"])
+        if action == "Cancel" and st.button("❌ Cancel Appointment"):
+            df.loc[df["ID"] == appt["ID"], "Status"] = "Cancelled"
+            save_appointments(df)
+            st.success("Appointment cancelled")
+        elif action == "Reschedule":
+            new_date = st.date_input("New Date", datetime.now(IST))
+            new_time = st.time_input("New Time", datetime.now(IST).time())
+            if st.button("🔄 Reschedule"):
+                df.loc[df["ID"] == appt["ID"], "AppointmentDate"] = new_date.strftime("%Y-%m-%d")
+                df.loc[df["ID"] == appt["ID"], "AppointmentTime"] = new_time.strftime("%H:%M")
+                df.loc[df["ID"] == appt["ID"], "Status"] = "Rescheduled"
                 save_appointments(df)
-                st.success("✅ Appointment deleted")
+                st.success("Appointment rescheduled")
+        elif action == "Delete" and st.button("🗑 Delete Appointment"):
+            df = df[df["ID"] != appt["ID"]]
+            save_appointments(df)
+            st.success("Appointment deleted")
+
 
 # =======================================================
 # 👨‍⚕️ DOCTOR SECTION
@@ -257,4 +274,5 @@ if role == "Doctor":
                 st.dataframe(history[show_cols], use_container_width=True)
             else:
                 st.info("No past history found for this patient.")
+
 
