@@ -47,6 +47,9 @@ if st.button("✅ Book Appointment"):
 
         df.to_excel(APPOINTMENT_FILE, index=False)
         st.success(f"✅ Appointment booked for {name} with {doctor} on {appt_date} at {appt_time}")
+
+        # 🔄 Force rerun so calendar refreshes
+        st.experimental_rerun()
     else:
         st.error("⚠️ Please enter at least Patient Name and Mobile Number")
 
@@ -72,7 +75,6 @@ if os.path.exists(APPOINTMENT_FILE):
       <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
       <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
       <script>
-
         document.addEventListener('DOMContentLoaded', function() {{
           var calendarEl = document.getElementById('calendar');
           var calendar = new FullCalendar.Calendar(calendarEl, {{
@@ -94,6 +96,7 @@ if os.path.exists(APPOINTMENT_FILE):
     </html>
     """
 
-    components.html(calendar_html, height=650, scrolling=True)
+    # 🔄 Always re-render the component
+    components.html(calendar_html, height=650, scrolling=True, key=datetime.now().strftime("%H%M%S"))
 else:
     st.info("No appointments booked yet. Book one to see it on the calendar.")
