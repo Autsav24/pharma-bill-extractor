@@ -5,6 +5,7 @@ import urllib.parse
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib.units import cm
 
 st.set_page_config(page_title="Buddha Clinic - Appointments", page_icon="📅", layout="wide")
 
@@ -62,46 +63,61 @@ def generate_patient_id(df):
 def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes):
     filename = f"prescription_{appt['PatientID']}_{appt['ID']}.pdf"
     c = canvas.Canvas(filename, pagesize=A4)
+    width, height = A4
 
-    # Header
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(200, 800, "Buddha Clinic - Prescription")
+    # -------- Clinic Header --------
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(2*cm, height-2*cm, "Buddha Clinic")
     c.setFont("Helvetica", 12)
-    c.drawString(50, 770, f"Patient: {appt['Name']} (ID: {appt['PatientID']})")
-    c.drawString(50, 750, f"Age: {appt['Age']} | Gender: {appt['Gender']}")
-    c.drawString(50, 730, f"Height: {appt['Height']} cm | Weight: {appt['Weight']} kg")
-    c.drawString(50, 710, f"Doctor: {appt['Doctor']}")
-    c.drawString(50, 690, f"Date: {appt['AppointmentDate']} {appt['AppointmentTime']}")
+    c.drawString(2*cm, height-2.7*cm, "Dr. Ankur Poddar, MBBS")
+    c.drawString(2*cm, height-3.2*cm, "Contact: +91-9876543210")
+    c.line(2*cm, height-3.5*cm, width-2*cm, height-3.5*cm)
 
-    c.line(50, 675, 500, 675)
-
-    # Diagnosis
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, 655, "Diagnosis:")
+    # -------- Patient Info --------
     c.setFont("Helvetica", 11)
-    text_obj = c.beginText(50, 640)
+    c.drawString(2*cm, height-4.5*cm, f"Patient Name : {appt['Name']}   (ID: {appt['PatientID']})")
+    c.drawString(2*cm, height-5.2*cm, f"Age: {appt['Age']} | Gender: {appt['Gender']}")
+    c.drawString(2*cm, height-5.9*cm, f"Height: {appt['Height']} cm | Weight: {appt['Weight']} kg")
+    c.drawString(2*cm, height-6.6*cm, f"Date: {appt['AppointmentDate']} {appt['AppointmentTime']}")
+
+    # -------- Prescription Symbol (Rx) --------
+    c.setFont("Helvetica-Bold", 28)
+    c.drawString(2*cm, height-8*cm, "℞")
+
+    # -------- Diagnosis --------
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(3*cm, height-8*cm, "Diagnosis:")
+    c.setFont("Helvetica", 11)
+    text_obj = c.beginText(3*cm, height-8.7*cm)
     text_obj.textLines(diagnosis if diagnosis else "N/A")
     c.drawText(text_obj)
 
-    # Medicines
+    # -------- Medicines --------
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, 610, "Medicines:")
+    c.drawString(3*cm, height-10*cm, "Medicines:")
     c.setFont("Helvetica", 11)
-    med_obj = c.beginText(50, 595)
+    med_obj = c.beginText(3.5*cm, height-10.7*cm)
     if medicines:
         for med in medicines.split("\n"):
-            med_obj.textLine(f"- {med}")
+            med_obj.textLine(f"• {med}")
     else:
         med_obj.textLine("N/A")
     c.drawText(med_obj)
 
-    # Additional Notes
+    # -------- Doctor Notes --------
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, 560, "Doctor Notes:")
+    c.drawString(3*cm, height-13*cm, "Notes:")
     c.setFont("Helvetica", 11)
-    note_obj = c.beginText(50, 545)
+    note_obj = c.beginText(3*cm, height-13.7*cm)
     note_obj.textLines(doctor_notes if doctor_notes else "N/A")
     c.drawText(note_obj)
+
+    # -------- Footer --------
+    c.line(2*cm, 3*cm, width-2*cm, 3*cm)
+    c.setFont("Helvetica-Oblique", 10)
+    c.drawString(2*cm, 2.5*cm, "This is a computer-generated prescription from Buddha Clinic.")
+    c.setFont("Helvetica", 12)
+    c.drawString(width-6*cm, 2.5*cm, "Doctor's Signature")
 
     c.save()
     return filename
@@ -112,13 +128,13 @@ role = st.radio("👥 Who is using this system?", ["Patient", "Reception/Staff",
 # Password Protection
 if role == "Reception/Staff":
     pw = st.text_input("Enter Staff Password", type="password")
-    if pw != "staff123":   # <-- change staff password here
+    if pw != "staff123":
         st.warning("🔒 Enter valid Staff password to continue")
         st.stop()
 
 if role == "Doctor":
     pw = st.text_input("Enter Doctor Password", type="password")
-    if pw != "doctor123":   # <-- change doctor password here
+    if pw != "doctor123":
         st.warning("🔒 Enter valid Doctor password to continue")
         st.stop()
 
