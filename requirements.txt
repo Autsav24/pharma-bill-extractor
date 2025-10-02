@@ -1,6 +1,7 @@
 streamlit
-easyocr
+paddleocr
 opencv-python
 pillow
 pandas
+
 openpyxl
