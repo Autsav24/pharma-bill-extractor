@@ -1,17 +1,18 @@
 import streamlit as st
 import pandas as pd
-import easyocr
+from google.cloud import vision
 from PIL import Image
 import re
 import os
 from datetime import datetime
+import io
 
-# ✅ Cache OCR so it loads only once
+# ✅ Load Google Vision Client
 @st.cache_resource
-def load_ocr():
-    return easyocr.Reader(['en'])
+def load_client():
+    return vision.ImageAnnotatorClient()
 
-reader = load_ocr()
+client = load_client()
 
 # Sidebar Navigation
 st.sidebar.title("🏥 Buddha Clinic")
@@ -61,9 +62,10 @@ if page == "📄 Bill Extractor":
     if uploaded_files:
         results = []
         for file in uploaded_files:
-            img = Image.open(file)
-            result = reader.readtext(img, detail=0)  # OCR
-            text = "\n".join(result)
+            content = file.read()
+            image = vision.Image(content=content)
+            response = client.text_detection(image=image)
+            text = response.full_text_annotation.text
 
             fields = extract_fields(text)
             fields["File"] = file.name
