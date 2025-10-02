@@ -13,27 +13,23 @@ from reportlab.lib.units import cm
 st.set_page_config(page_title="Buddha Clinic - Appointments", page_icon="📅", layout="wide")
 
 APPOINTMENT_FILE = "appointments.xlsx"
+REPORTS_DIR = "reports"
+PRESCRIPTIONS_DIR = "prescriptions"
+
+os.makedirs(REPORTS_DIR, exist_ok=True)
+os.makedirs(PRESCRIPTIONS_DIR, exist_ok=True)
 
 # ---------- Indian Timezone ----------
 IST = pytz.timezone("Asia/Kolkata")
 
 # ----------------- Helpers -----------------
-def valid_mobile(m: str) -> bool:
-    m = m.strip().replace(" ", "").replace("-", "")
-    return m.isdigit() and (len(m) in (10, 12))
-
-def wa_link(number: str, text: str) -> str:
-    num = number.strip().replace(" ", "").replace("-", "")
-    if len(num) == 10:
-        num = "91" + num
-    return f"https://wa.me/{num}?text={urllib.parse.quote(text)}"
-
 def load_appointments() -> pd.DataFrame:
     if os.path.exists(APPOINTMENT_FILE):
         return pd.read_excel(APPOINTMENT_FILE)
     return pd.DataFrame(columns=[
         "ID","PatientID","Name","Age","Gender","Height","Weight","Mobile",
-        "AppointmentDate","AppointmentTime","Doctor","Notes","Status","BookedOn"
+        "AppointmentDate","AppointmentTime","Doctor","Notes","Status",
+        "BookedOn","ReportFiles","PrescriptionFiles","FollowUpDate"
     ])
 
 def save_appointments(df: pd.DataFrame):
@@ -53,8 +49,8 @@ def generate_patient_id(df: pd.DataFrame):
     return f"P{new_num:04d}"
 
 # Prescription PDF
-def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports=None):
-    filename = f"prescription_{appt['PatientID']}_{appt['ID']}.pdf"
+def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports, followup):
+    filename = f"{PRESCRIPTIONS_DIR}/prescription_{appt['PatientID']}_{appt['ID']}_{datetime.now(IST).strftime('%Y%m%d_%H%M')}.pdf"
     c = canvas.Canvas(filename, pagesize=A4)
     width, height = A4
 
@@ -97,10 +93,7 @@ def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports=None
     c.drawString(2*cm, 6*cm, "Investigations / Reports:")
     c.setFont("Helvetica", 11)
     rep_obj = c.beginText(2.5*cm, 5.5*cm)
-    if reports:
-        rep_obj.textLines(reports)
-    else:
-        rep_obj.textLine("None prescribed")
+    rep_obj.textLines(reports if reports else "None prescribed")
     c.drawText(rep_obj)
 
     # Notes
@@ -110,6 +103,11 @@ def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports=None
     note_obj = c.beginText(2.5*cm, 3.5*cm)
     note_obj.textLines(doctor_notes if doctor_notes else "N/A")
     c.drawText(note_obj)
+
+    # Follow-up
+    if followup:
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(2*cm, 3*cm, f"Next Appointment / Follow-up: {followup}")
 
     # Footer
     c.line(2*cm, 2.5*cm, width-2*cm, 2.5*cm)
@@ -170,7 +168,10 @@ if role == "Patient":
             "Doctor": doctor,
             "Notes": notes,
             "Status": "Booked",
-            "BookedOn": datetime.now(IST).strftime("%Y-%m-%d %H:%M")
+            "BookedOn": datetime.now(IST).strftime("%Y-%m-%d %H:%M"),
+            "ReportFiles": "",
+            "PrescriptionFiles": "",
+            "FollowUpDate": ""
         }])
 
         df = pd.concat([df, new_entry], ignore_index=True)
@@ -231,16 +232,37 @@ if role == "Doctor":
         medicines = st.text_area("Medicines (one per line)")
         reports = st.text_area("Investigations / Reports (जाँच)")
         doctor_notes = st.text_area("Additional Notes")
+        followup = st.date_input("Next Follow-up Date (optional)", datetime.now(IST))
+
+        # Upload report
+        uploaded_report = st.file_uploader("📎 Upload Report (PDF/Image)", type=["pdf","jpg","jpeg","png"])
+        if uploaded_report:
+            report_filename = f"{REPORTS_DIR}/{appt['PatientID']}_{datetime.now(IST).strftime('%Y%m%d_%H%M')}_{uploaded_report.name}"
+            with open(report_filename, "wb") as f:
+                f.write(uploaded_report.getbuffer())
+            existing_reports = str(appt["ReportFiles"]) if pd.notna(appt["ReportFiles"]) else ""
+            new_reports = existing_reports + ";" + report_filename if existing_reports else report_filename
+            df.loc[df["ID"] == appt["ID"], "ReportFiles"] = new_reports
+            save_appointments(df)
+            st.success("✅ Report uploaded")
 
         if st.button("💊 Save Prescription & Mark Seen"):
-            pdf_file = save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports)
+            pdf_file = save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports, followup)
 
+            existing_presc = str(appt["PrescriptionFiles"]) if pd.notna(appt["PrescriptionFiles"]) else ""
+            new_presc = existing_presc + ";" + pdf_file if existing_presc else pdf_file
+            df.loc[df["ID"] == appt["ID"], "PrescriptionFiles"] = new_presc
             df.loc[df["ID"] == appt["ID"], "Status"] = "Seen"
+            df.loc[df["ID"] == appt["ID"], "FollowUpDate"] = followup.strftime("%Y-%m-%d") if followup else ""
             save_appointments(df)
 
             with open(pdf_file, "rb") as f:
-                st.download_button("📥 Download Prescription PDF", f, file_name=pdf_file)
+                st.download_button("📥 Download Prescription PDF", f, file_name=os.path.basename(pdf_file))
 
             st.success(f"✅ Prescription saved for {appt['Name']}. Status updated to Seen.")
-    else:
-        st.info("No appointments for today.")
+
+        # Show patient history
+        st.subheader("📖 Patient History")
+        history = df[df["PatientID"] == appt["PatientID"]]
+        if not history.empty:
+            st.dataframe(history[["AppointmentDate","Diagnosis","PrescriptionFiles","ReportFiles","FollowUpDate"]], use_container_width=True)
