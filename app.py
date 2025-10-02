@@ -42,19 +42,22 @@ def save_appointments(df: pd.DataFrame):
     df.to_excel(APPOINTMENT_FILE, index=False)
 
 def generate_appointment_id(df):
-    if df.empty or df["ID"].dropna().empty:
+    if "ID" not in df.columns or df["ID"].dropna().empty:
         return 1
     else:
-        return int(df["ID"].dropna().max()) + 1
+        numeric_ids = pd.to_numeric(df["ID"], errors="coerce").dropna()
+        if numeric_ids.empty:
+            return 1
+        return int(numeric_ids.max()) + 1
 
 def generate_patient_id(df):
-    if df.empty or df["PatientID"].dropna().empty:
+    if "PatientID" not in df.columns or df["PatientID"].dropna().empty:
         return "P0001"
     else:
-        last_id = df["PatientID"].dropna().iloc[-1]
-        try:
+        last_id = str(df["PatientID"].dropna().iloc[-1])
+        if last_id.startswith("P") and last_id[1:].isdigit():
             num = int(last_id[1:]) + 1
-        except:
+        else:
             num = 1
         return f"P{num:04d}"
 
