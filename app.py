@@ -5,159 +5,201 @@ import json
 import urllib.parse
 from datetime import datetime
 import streamlit.components.v1 as components
+import streamlit_authenticator as stauth
 
-st.set_page_config(page_title="Buddha Clinic - Appointments", page_icon="📅", layout="wide")
+# ----------------- LOGIN -----------------
+names = ["Reception Staff", "Dr. Ankur Poddar"]
+usernames = ["staff", "ankur"]
+passwords = ["staff123", "drankur"]   # 🔒 replace with hashed passwords in real use
 
-APPOINTMENT_FILE = "appointments.xlsx"
+authenticator = stauth.Authenticate(
+    dict(zip(usernames, names)),   # {"staff": "Reception Staff", "ankur": "Dr. Ankur Poddar"}
+    dict(zip(usernames, passwords)), 
+    "clinic_app", "abcdef", cookie_expiry_days=1
+)
 
-st.title("🏥 Buddha Clinic - Appointment Booking")
+name, authentication_status, username = authenticator.login("Login", "main")
 
-# ----------------- Helpers -----------------
-def valid_mobile(m: str) -> bool:
-    m = m.strip().replace(" ", "").replace("-", "")
-    return m.isdigit() and (len(m) in (10, 12))
+if authentication_status is False:
+    st.error("❌ Invalid username or password")
+elif authentication_status is None:
+    st.warning("Please enter your username and password")
+elif authentication_status:   # ✅ Logged in
+    authenticator.logout("Logout", "sidebar")
+    st.sidebar.success(f"Welcome {name}")
 
-def wa_link(number: str, text: str) -> str:
-    num = number.strip().replace(" ", "").replace("-", "")
-    if len(num) == 10:  # India 10 digit -> prepend +91
-        num = "91" + num
-    return f"https://wa.me/{num}?text={urllib.parse.quote(text)}"
-
-def load_appointments() -> pd.DataFrame:
-    if os.path.exists(APPOINTMENT_FILE):
-        return pd.read_excel(APPOINTMENT_FILE)
-    return pd.DataFrame(columns=[
-        "Name","Age","Gender","Mobile",
-        "AppointmentDate","AppointmentTime","Doctor","BookedOn"
-    ])
-
-def save_appointments(df: pd.DataFrame):
-    df.to_excel(APPOINTMENT_FILE, index=False)
-
-# ----------------- Form -----------------
-st.subheader("📌 Book a New Appointment")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    name = st.text_input("Patient Name")
-    age = st.number_input("Age", min_value=0, max_value=120, step=1)
-    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-
-with col2:
-    mobile = st.text_input("Mobile Number (10 digits or with country code)")
-    appt_date = st.date_input("Appointment Date", datetime.today())
-    appt_time = st.time_input("Appointment Time")
-    doctor = st.selectbox("Doctor", ["Dr. Ankur Poddar"])
-
-book = st.button("✅ Book Appointment")
-
-if book:
-    if not name or not mobile:
-        st.error("⚠️ Please enter at least Patient Name and Mobile Number")
-    elif not valid_mobile(mobile):
-        st.error("⚠️ Enter a valid mobile (10 digits or include country code, e.g., 91XXXXXXXXXX)")
+    # ----------------- Role Based -----------------
+    if username == "staff":
+        role = "Reception/Staff"
+        selected_doctor = None
     else:
-        df = load_appointments()
+        role = "Doctor"
+        selected_doctor = "Dr. Ankur Poddar"
 
-        date_str = appt_date.strftime("%Y-%m-%d")
-        time_str = appt_time.strftime("%H:%M")
+    st.title("🏥 Buddha Clinic - Appointment System")
 
-        dup = df[
-            (df["Mobile"].astype(str).str.replace(r"[ -]", "", regex=True) == mobile.strip().replace(" ", "").replace("-", "")) &
-            (df["AppointmentDate"] == date_str) &
-            (df["AppointmentTime"] == time_str)
-        ]
-        if not dup.empty:
-            st.warning("⚠️ Duplicate booking detected for this patient at the same date & time.")
+    APPOINTMENT_FILE = "appointments.xlsx"
+
+    def valid_mobile(m: str) -> bool:
+        m = m.strip().replace(" ", "").replace("-", "")
+        return m.isdigit() and (len(m) in (10, 12))
+
+    def wa_link(number: str, text: str) -> str:
+        num = number.strip().replace(" ", "").replace("-", "")
+        if len(num) == 10:
+            num = "91" + num
+        return f"https://wa.me/{num}?text={urllib.parse.quote(text)}"
+
+    def load_appointments() -> pd.DataFrame:
+        if os.path.exists(APPOINTMENT_FILE):
+            return pd.read_excel(APPOINTMENT_FILE)
+        return pd.DataFrame(columns=[
+            "Name","Age","Gender","Mobile",
+            "AppointmentDate","AppointmentTime","Doctor","Notes","Status","BookedOn"
+        ])
+
+    def save_appointments(df: pd.DataFrame):
+        df.to_excel(APPOINTMENT_FILE, index=False)
+
+    # ----------------- Booking Form (Staff Only) -----------------
+    if role == "Reception/Staff":
+        st.subheader("📌 Book a New Appointment")
+        col1, col2 = st.columns(2)
+        with col1:
+            name = st.text_input("Patient Name")
+            age = st.number_input("Age", min_value=0, max_value=120, step=1)
+            gender = st.selectbox("Gender", ["Male", "Female", "Other"])
+            notes = st.text_area("Notes / Reason for Visit")
+        with col2:
+            mobile = st.text_input("Mobile Number")
+            appt_date = st.date_input("Appointment Date", datetime.today())
+            appt_time = st.time_input("Appointment Time")
+            doctor = st.selectbox("Doctor", ["Dr. Ankur Poddar"])
+
+        if st.button("✅ Book Appointment"):
+            if not name or not mobile:
+                st.error("⚠️ Name and Mobile required")
+            elif not valid_mobile(mobile):
+                st.error("⚠️ Invalid mobile number")
+            else:
+                df = load_appointments()
+                date_str = appt_date.strftime("%Y-%m-%d")
+                time_str = appt_time.strftime("%H:%M")
+
+                new_entry = pd.DataFrame([{
+                    "Name": name,
+                    "Age": age,
+                    "Gender": gender,
+                    "Mobile": mobile.strip(),
+                    "AppointmentDate": date_str,
+                    "AppointmentTime": time_str,
+                    "Doctor": doctor,
+                    "Notes": notes,
+                    "Status": "Booked",
+                    "BookedOn": datetime.now().strftime("%Y-%m-%d %H:%M")
+                }])
+                df = pd.concat([df, new_entry], ignore_index=True)
+                save_appointments(df)
+
+                st.success(f"✅ Appointment booked for {name} with {doctor} on {date_str} at {time_str}")
+
+                msg = f"Hello {name}, your appointment with {doctor} is confirmed on {date_str} at {time_str}. - Buddha Clinic"
+                st.markdown(f"[📲 Send WhatsApp Confirmation]({wa_link(mobile, msg)})", unsafe_allow_html=True)
+
+    # ----------------- Appointment Management -----------------
+    st.subheader("🛠 Manage Appointments")
+
+    df = load_appointments()
+    if selected_doctor:
+        df = df[df["Doctor"] == selected_doctor]
+
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+
+        if role == "Reception/Staff":
+            selected = st.selectbox("Select appointment to update", df.index.astype(str))
+            if selected:
+                selected_idx = int(selected)
+                st.write("Editing:", df.loc[selected_idx, "Name"])
+
+                action = st.radio("Action", ["Cancel", "Reschedule"])
+                if action == "Cancel":
+                    if st.button("❌ Cancel Appointment"):
+                        df.at[selected_idx, "Status"] = "Cancelled"
+                        save_appointments(df)
+                        st.success("Appointment cancelled")
+                elif action == "Reschedule":
+                    new_date = st.date_input("New Date", datetime.today())
+                    new_time = st.time_input("New Time")
+                    if st.button("🔄 Reschedule"):
+                        df.at[selected_idx, "AppointmentDate"] = new_date.strftime("%Y-%m-%d")
+                        df.at[selected_idx, "AppointmentTime"] = new_time.strftime("%H:%M")
+                        df.at[selected_idx, "Status"] = "Rescheduled"
+                        save_appointments(df)
+                        st.success("Appointment rescheduled")
+
+    # ----------------- Calendar -----------------
+    st.subheader("📅 Calendar")
+    df = load_appointments()
+    if selected_doctor:
+        df = df[df["Doctor"] == selected_doctor]
+
+    if not df.empty:
+        doctor_colors = {"Dr. Ankur Poddar": "#3b82f6"}
+        events = []
+        for _, row in df.iterrows():
+            if row["Status"] != "Cancelled":
+                events.append({
+                    "title": f"{row['Name']} ({row['Doctor']})",
+                    "start": f"{row['AppointmentDate']}T{row['AppointmentTime']}:00",
+                    "color": doctor_colors.get(str(row["Doctor"]), "#10b981")
+                })
+
+        calendar_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+          <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+          <script>
+            document.addEventListener('DOMContentLoaded', function() {
+              var calendarEl = document.getElementById('calendar');
+              var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'timeGridWeek',
+                height: 600,
+                headerToolbar: {
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                events: EVENTS_PLACEHOLDER
+              });
+              calendar.render();
+            });
+          </script>
+        </head>
+        <body>
+          <div id='calendar'></div>
+        </body>
+        </html>
+        """.replace("EVENTS_PLACEHOLDER", json.dumps(events))
+
+        components.html(calendar_html, height=650, scrolling=True)
+
+    # ----------------- Today’s Appointments -----------------
+    st.subheader("📋 Today’s Appointments")
+    df = load_appointments()
+    if selected_doctor:
+        df = df[df["Doctor"] == selected_doctor]
+
+    if not df.empty:
+        today = datetime.today().strftime("%Y-%m-%d")
+        todays = df[(df["AppointmentDate"] == today) & (df["Status"] != "Cancelled")]
+        if not todays.empty:
+            st.dataframe(todays, use_container_width=True)
         else:
-            new_entry = pd.DataFrame([{
-                "Name": name,
-                "Age": age,
-                "Gender": gender,
-                "Mobile": mobile.strip(),
-                "AppointmentDate": date_str,
-                "AppointmentTime": time_str,
-                "Doctor": doctor,
-                "BookedOn": datetime.now().strftime("%Y-%m-%d %H:%M")
-            }])
-            df = pd.concat([df, new_entry], ignore_index=True)
-            save_appointments(df)
+            st.info("No appointments today.")
 
-            st.success(f"✅ Appointment booked for {name} with {doctor} on {date_str} at {time_str}")
-
-            # WhatsApp confirmation (prefilled message)
-            msg = f"Hello {name}, your appointment with {doctor} is confirmed on {date_str} at {time_str}. - Buddha Clinic"
-            st.markdown(f"[📲 Send WhatsApp Confirmation]({wa_link(mobile, msg)})", unsafe_allow_html=True)
-
-# ----------------- Calendar -----------------
-st.subheader("📅 Appointment Calendar")
-
-df = load_appointments()
-if not df.empty:
-    # Colors by doctor
-    doctor_colors = {
-        "Dr. Ankur Poddar": "#3b82f6",  # blue
-    }
-
-    events = []
-    for _, row in df.iterrows():
-        events.append({
-            "title": f"{row['Name']} ({row['Doctor']})",
-            "start": f"{row['AppointmentDate']}T{row['AppointmentTime']}:00",
-            "color": doctor_colors.get(str(row.get("Doctor", "")), "#10b981")
-        })
-
-    # Use placeholder replacement instead of f-string
-    calendar_html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
-      <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
-      <script>
-        document.addEventListener('DOMContentLoaded', function() {
-          var calendarEl = document.getElementById('calendar');
-          var calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'timeGridWeek',
-            slotMinTime: '08:00:00',
-            slotMaxTime: '20:00:00',
-            nowIndicator: true,
-            height: 600,
-            headerToolbar: {
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            events: EVENTS_PLACEHOLDER
-          });
-          calendar.render();
-        });
-      </script>
-      <style>
-        body { margin:0; padding:0; }
-        #calendar { max-width: 1100px; margin: 0 auto; }
-      </style>
-    </head>
-    <body>
-      <div id='calendar'></div>
-    </body>
-    </html>
-    """.replace("EVENTS_PLACEHOLDER", json.dumps(events))
-
-    components.html(calendar_html, height=650, scrolling=True)
-else:
-    st.info("No appointments booked yet. Book one to see it on the calendar.")
-
-# ----------------- Today & Export -----------------
-st.subheader("📋 Today’s Appointments")
-if not df.empty:
-    today = datetime.today().strftime("%Y-%m-%d")
-    todays = df[df["AppointmentDate"] == today]
-    if not todays.empty:
-        st.dataframe(todays, use_container_width=True)
-    else:
-        st.info("No appointments today.")
-
-    with open(APPOINTMENT_FILE, "rb") as f:
-        st.download_button("📥 Download appointments.xlsx", data=f, file_name="appointments.xlsx")
+        if role == "Reception/Staff":
+            with open(APPOINTMENT_FILE, "rb") as f:
+                st.download_button("📥 Download appointments.xlsx", data=f, file_name="appointments.xlsx")
