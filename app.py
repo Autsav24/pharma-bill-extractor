@@ -1,16 +1,19 @@
 import streamlit as st
 import pandas as pd
 from google.cloud import vision
+from google.oauth2 import service_account
 from PIL import Image
 import re
 import os
 from datetime import datetime
-import io
 
-# ✅ Load Google Vision Client
+# ✅ Load Google Vision Client from Streamlit Secrets
 @st.cache_resource
 def load_client():
-    return vision.ImageAnnotatorClient()
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"]
+    )
+    return vision.ImageAnnotatorClient(credentials=credentials)
 
 client = load_client()
 
