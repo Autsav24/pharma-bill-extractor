@@ -124,13 +124,13 @@ role = st.radio("👥 Who is using this system?", ["Patient", "Reception/Staff",
 
 if role == "Reception/Staff":
     pw = st.text_input("Enter Staff Password", type="password")
-    if pw != "staff123":
+    if pw != "709":
         st.warning("🔒 Enter valid Staff password to continue")
         st.stop()
 
 if role == "Doctor":
     pw = st.text_input("Enter Doctor Password", type="password")
-    if pw != "doctor123":
+    if pw != "709":
         st.warning("🔒 Enter valid Doctor password to continue")
         st.stop()
 
@@ -266,3 +266,4 @@ if role == "Doctor":
         history = df[df["PatientID"] == appt["PatientID"]]
         if not history.empty:
             st.dataframe(history[["AppointmentDate","Diagnosis","PrescriptionFiles","ReportFiles","FollowUpDate"]], use_container_width=True)
+
