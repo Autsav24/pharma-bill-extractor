@@ -1,115 +1,99 @@
 import streamlit as st
 import pandas as pd
-from google.cloud import vision
-from google.oauth2 import service_account
-from PIL import Image
-import re
 import os
 from datetime import datetime
+import streamlit.components.v1 as components
 
-# ✅ Load Google Vision Client from Streamlit Secrets
-@st.cache_resource
-def load_client():
-    # This loads credentials directly from Streamlit secrets
-    credentials = service_account.Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"]
-    )
-    return vision.ImageAnnotatorClient(credentials=credentials)
+st.set_page_config(page_title="Buddha Clinic - Appointments", page_icon="📅", layout="wide")
 
-client = load_client()
+APPOINTMENT_FILE = "appointments.xlsx"
 
-# ======================================================
-# --------- BILL EXTRACTOR -----------------------------
-# ======================================================
-st.title("📄 Pharma Supplier Bill Extractor - Buddha Clinic")
+st.title("🏥 Buddha Clinic - Appointment Booking")
 
-def extract_fields(text):
-    estimate = None
-    match_est = re.search(r"Estimate\s*No\.?\s*:? ?(\d+)", text, re.IGNORECASE)
-    if match_est:
-        estimate = match_est.group(1)
+# ====== Appointment Form ======
+st.subheader("📌 Book a New Appointment")
 
-    date = None
-    match_date = re.search(r"(\d{2}[-/]\d{2}[-/]\d{4})", text)
-    if match_date:
-        date = match_date.group(1)
+col1, col2 = st.columns(2)
 
-    total = None
-    match_total = re.search(r"(Grand\s*Total|Total)\s*[:]? ?₹?(\d+\.?\d*)", text, re.IGNORECASE)
-    if match_total:
-        total = match_total.group(2)
+with col1:
+    name = st.text_input("Patient Name")
+    age = st.number_input("Age", min_value=0, max_value=120, step=1)
+    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
 
-    buyer = ""
-    for line in text.split("\n"):
-        if line.strip() and not any(x in line for x in ["M/s", "Dr.", "Chemist", "Pharma", "Estimate", "Total"]):
-            buyer = line.strip()
-            break
+with col2:
+    mobile = st.text_input("Mobile Number")
+    appt_date = st.date_input("Appointment Date", datetime.today())
+    appt_time = st.time_input("Appointment Time")
+    doctor = st.selectbox("Doctor", ["Dr. Ankur Poddar"])
 
-    return {
-        "EstimateNo": estimate or "",
-        "Date": date or "",
-        "GrandTotal": total or "",
-        "BuyerName": buyer
-    }
+if st.button("✅ Book Appointment"):
+    if name and mobile:
+        new_entry = pd.DataFrame([{
+            "Name": name,
+            "Age": age,
+            "Gender": gender,
+            "Mobile": mobile,
+            "AppointmentDate": appt_date.strftime("%Y-%m-%d"),
+            "AppointmentTime": appt_time.strftime("%H:%M"),
+            "Doctor": doctor,
+            "BookedOn": datetime.now().strftime("%Y-%m-%d %H:%M")
+        }])
 
-uploaded_files = st.file_uploader(
-    "Upload Bill Images (JPG/PNG)", 
-    type=["jpg", "jpeg", "png"], 
-    accept_multiple_files=True
-)
+        if os.path.exists(APPOINTMENT_FILE):
+            old = pd.read_excel(APPOINTMENT_FILE)
+            df = pd.concat([old, new_entry], ignore_index=True)
+        else:
+            df = new_entry
 
-if uploaded_files:
-    results = []
-    for file in uploaded_files:
-        content = file.read()
-        image = vision.Image(content=content)
-        response = client.text_detection(image=image)
-        text = response.full_text_annotation.text
+        df.to_excel(APPOINTMENT_FILE, index=False)
+        st.success(f"✅ Appointment booked for {name} with {doctor} on {appt_date} at {appt_time}")
+    else:
+        st.error("⚠️ Please enter at least Patient Name and Mobile Number")
 
-        fields = extract_fields(text)
-        fields["File"] = file.name
-        results.append(fields)
+# ====== Calendar View ======
+st.subheader("📅 Appointment Calendar")
 
-    df = pd.DataFrame(results)
+if os.path.exists(APPOINTMENT_FILE):
+    df = pd.read_excel(APPOINTMENT_FILE)
 
-    st.write("✅ Extracted Data (you can edit if needed)")
-    edited_df = st.data_editor(df, num_rows="dynamic")
+    # Convert to events JSON for FullCalendar
+    events = []
+    for _, row in df.iterrows():
+        events.append({
+            "title": f"{row['Name']} ({row['Doctor']})",
+            "start": f"{row['AppointmentDate']}T{row['AppointmentTime']}:00",
+        })
 
-    errors = []
-    for i, row in edited_df.iterrows():
-        if row["EstimateNo"] and not str(row["EstimateNo"]).isdigit():
-            errors.append(f"{row['File']} → Invalid Estimate No")
-        if row["Date"] and not re.match(r"\d{2}-\d{2}-\d{4}", str(row["Date"])):
-            errors.append(f"{row['File']} → Invalid Date")
-        if row["GrandTotal"] and not str(row["GrandTotal"]).replace(".", "").isdigit():
-            errors.append(f"{row['File']} → Invalid Grand Total")
-        if not row["BuyerName"]:
-            errors.append(f"{row['File']} → Buyer Name missing")
+    # HTML/JS for FullCalendar
+    calendar_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+      <script>
 
-    if errors:
-        st.warning("⚠️ Some issues found:")
-        for e in errors:
-            st.write("- " + e)
+        document.addEventListener('DOMContentLoaded', function() {{
+          var calendarEl = document.getElementById('calendar');
+          var calendar = new FullCalendar.Calendar(calendarEl, {{
+            initialView: 'dayGridMonth',
+            headerToolbar: {{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            }},
+            events: {events}
+          }});
+          calendar.render();
+        }});
+      </script>
+    </head>
+    <body>
+      <div id='calendar'></div>
+    </body>
+    </html>
+    """
 
-    if st.button("💾 Save to Monthly Excel"):
-        if not edited_df.empty:
-            date_str = edited_df.iloc[0]["Date"] or datetime.today().strftime("%d-%m-%Y")
-            try:
-                dt = datetime.strptime(date_str, "%d-%m-%Y")
-            except:
-                dt = datetime.today()
-
-            filename = f"bills_{dt.strftime('%Y_%m')}.xlsx"
-
-            if os.path.exists(filename):
-                old_df = pd.read_excel(filename)
-                final_df = pd.concat([old_df, edited_df], ignore_index=True)
-            else:
-                final_df = edited_df
-
-            final_df.to_excel(filename, index=False)
-
-            with open(filename, "rb") as f:
-                st.download_button("📥 Download Updated Excel", f, file_name=filename)
-
-            st.success(f"Data saved and appended to {filename}")
+    components.html(calendar_html, height=650, scrolling=True)
+else:
+    st.info("No appointments booked yet. Book one to see it on the calendar.")
