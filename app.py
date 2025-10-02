@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 import os
-import json
 import urllib.parse
 from datetime import datetime
 import pytz
-import streamlit.components.v1 as components
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
@@ -24,13 +22,19 @@ IST = pytz.timezone("Asia/Kolkata")
 
 # ----------------- Helpers -----------------
 def load_appointments() -> pd.DataFrame:
-    if os.path.exists(APPOINTMENT_FILE):
-        return pd.read_excel(APPOINTMENT_FILE)
-    return pd.DataFrame(columns=[
+    cols = [
         "ID","PatientID","Name","Age","Gender","Height","Weight","Mobile",
         "AppointmentDate","AppointmentTime","Doctor","Notes","Status",
-        "BookedOn","ReportFiles","PrescriptionFiles","FollowUpDate"
-    ])
+        "BookedOn","ReportFiles","PrescriptionFiles","FollowUpDate","Diagnosis"
+    ]
+    if os.path.exists(APPOINTMENT_FILE):
+        df = pd.read_excel(APPOINTMENT_FILE)
+        # Add missing columns if Excel is older
+        for col in cols:
+            if col not in df.columns:
+                df[col] = ""
+        return df[cols]
+    return pd.DataFrame(columns=cols)
 
 def save_appointments(df: pd.DataFrame):
     df.to_excel(APPOINTMENT_FILE, index=False)
@@ -124,13 +128,13 @@ role = st.radio("👥 Who is using this system?", ["Patient", "Reception/Staff",
 
 if role == "Reception/Staff":
     pw = st.text_input("Enter Staff Password", type="password")
-    if pw != "709":
+    if pw != "staff123":
         st.warning("🔒 Enter valid Staff password to continue")
         st.stop()
 
 if role == "Doctor":
     pw = st.text_input("Enter Doctor Password", type="password")
-    if pw != "709":
+    if pw != "doctor123":
         st.warning("🔒 Enter valid Doctor password to continue")
         st.stop()
 
@@ -171,7 +175,8 @@ if role == "Patient":
             "BookedOn": datetime.now(IST).strftime("%Y-%m-%d %H:%M"),
             "ReportFiles": "",
             "PrescriptionFiles": "",
-            "FollowUpDate": ""
+            "FollowUpDate": "",
+            "Diagnosis": ""
         }])
 
         df = pd.concat([df, new_entry], ignore_index=True)
@@ -252,6 +257,7 @@ if role == "Doctor":
             existing_presc = str(appt["PrescriptionFiles"]) if pd.notna(appt["PrescriptionFiles"]) else ""
             new_presc = existing_presc + ";" + pdf_file if existing_presc else pdf_file
             df.loc[df["ID"] == appt["ID"], "PrescriptionFiles"] = new_presc
+            df.loc[df["ID"] == appt["ID"], "Diagnosis"] = diagnosis
             df.loc[df["ID"] == appt["ID"], "Status"] = "Seen"
             df.loc[df["ID"] == appt["ID"], "FollowUpDate"] = followup.strftime("%Y-%m-%d") if followup else ""
             save_appointments(df)
@@ -265,5 +271,5 @@ if role == "Doctor":
         st.subheader("📖 Patient History")
         history = df[df["PatientID"] == appt["PatientID"]]
         if not history.empty:
-            st.dataframe(history[["AppointmentDate","Diagnosis","PrescriptionFiles","ReportFiles","FollowUpDate"]], use_container_width=True)
-
+            show_cols = [c for c in ["AppointmentDate","Diagnosis","PrescriptionFiles","ReportFiles","FollowUpDate"] if c in history.columns]
+            st.dataframe(history[show_cols], use_container_width=True)
