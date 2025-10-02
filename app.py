@@ -60,12 +60,12 @@ def generate_patient_id(df):
             num = 1
         return f"P{num:04d}"
 
-def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes):
+def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports=None):
     filename = f"prescription_{appt['PatientID']}_{appt['ID']}.pdf"
     c = canvas.Canvas(filename, pagesize=A4)
     width, height = A4
 
-    # -------- Clinic Header --------
+    # ---------- Clinic Header ----------
     c.setFont("Helvetica-Bold", 18)
     c.drawString(2*cm, height-2*cm, "Buddha Clinic")
     c.setFont("Helvetica", 12)
@@ -73,30 +73,25 @@ def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes):
     c.drawString(2*cm, height-3.2*cm, "Contact: +91-9876543210")
     c.line(2*cm, height-3.5*cm, width-2*cm, height-3.5*cm)
 
-    # -------- Patient Info --------
+    # ---------- Patient Info ----------
     c.setFont("Helvetica", 11)
-    c.drawString(2*cm, height-4.5*cm, f"Patient Name : {appt['Name']}   (ID: {appt['PatientID']})")
-    c.drawString(2*cm, height-5.2*cm, f"Age: {appt['Age']} | Gender: {appt['Gender']}")
-    c.drawString(2*cm, height-5.9*cm, f"Height: {appt['Height']} cm | Weight: {appt['Weight']} kg")
-    c.drawString(2*cm, height-6.6*cm, f"Date: {appt['AppointmentDate']} {appt['AppointmentTime']}")
+    c.drawString(2*cm, height-4.5*cm, f"Name: {appt['Name']}   Age: {appt['Age']} | Gender: {appt['Gender']}")
+    c.drawRightString(width-2*cm, height-4.5*cm, f"Height: {appt['Height']} cm   Weight: {appt['Weight']} kg")
+    c.drawString(2*cm, height-5.2*cm, f"Date: {appt['AppointmentDate']} {appt['AppointmentTime']}")
 
-    # -------- Prescription Symbol (Rx) --------
-    c.setFont("Helvetica-Bold", 28)
-    c.drawString(2*cm, height-8*cm, "℞")
-
-    # -------- Diagnosis --------
+    # ---------- Diagnosis ----------
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(3*cm, height-8*cm, "Diagnosis:")
+    c.drawString(2*cm, height-6.5*cm, "Clinical Diagnosis:")
     c.setFont("Helvetica", 11)
-    text_obj = c.beginText(3*cm, height-8.7*cm)
+    text_obj = c.beginText(2*cm, height-7.2*cm)
     text_obj.textLines(diagnosis if diagnosis else "N/A")
     c.drawText(text_obj)
 
-    # -------- Medicines --------
+    # ---------- Medicines ----------
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(3*cm, height-10*cm, "Medicines:")
+    c.drawString(2*cm, height-9*cm, "Prescription (℞):")
     c.setFont("Helvetica", 11)
-    med_obj = c.beginText(3.5*cm, height-10.7*cm)
+    med_obj = c.beginText(2.5*cm, height-9.7*cm)
     if medicines:
         for med in medicines.split("\n"):
             med_obj.textLine(f"• {med}")
@@ -104,20 +99,31 @@ def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes):
         med_obj.textLine("N/A")
     c.drawText(med_obj)
 
-    # -------- Doctor Notes --------
+    # ---------- Reports / Tests ----------
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(3*cm, height-13*cm, "Notes:")
+    c.drawString(2*cm, 6*cm, "Investigations / Reports:")
     c.setFont("Helvetica", 11)
-    note_obj = c.beginText(3*cm, height-13.7*cm)
+    rep_obj = c.beginText(2.5*cm, 5.5*cm)
+    if reports:
+        rep_obj.textLines(reports)
+    else:
+        rep_obj.textLine("None prescribed")
+    c.drawText(rep_obj)
+
+    # ---------- Doctor Notes ----------
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2*cm, 4*cm, "Doctor's Notes:")
+    c.setFont("Helvetica", 11)
+    note_obj = c.beginText(2.5*cm, 3.5*cm)
     note_obj.textLines(doctor_notes if doctor_notes else "N/A")
     c.drawText(note_obj)
 
-    # -------- Footer --------
-    c.line(2*cm, 3*cm, width-2*cm, 3*cm)
+    # ---------- Footer ----------
+    c.line(2*cm, 2.5*cm, width-2*cm, 2.5*cm)
     c.setFont("Helvetica-Oblique", 10)
-    c.drawString(2*cm, 2.5*cm, "This is a computer-generated prescription from Buddha Clinic.")
+    c.drawString(2*cm, 2*cm, "This is a computer-generated prescription from Buddha Clinic.")
     c.setFont("Helvetica", 12)
-    c.drawString(width-6*cm, 2.5*cm, "Doctor's Signature")
+    c.drawRightString(width-2*cm, 2*cm, "Doctor's Signature")
 
     c.save()
     return filename
@@ -294,10 +300,11 @@ if role == "Doctor":
 
         diagnosis = st.text_area("Diagnosis")
         medicines = st.text_area("Medicines (one per line)")
+        reports = st.text_area("Investigations / Reports (जाँच)")
         doctor_notes = st.text_area("Additional Notes")
 
         if st.button("💊 Save Prescription"):
-            pdf_file = save_prescription_pdf(appt, diagnosis, medicines, doctor_notes)
+            pdf_file = save_prescription_pdf(appt, diagnosis, medicines, doctor_notes, reports)
             with open(pdf_file, "rb") as f:
                 st.download_button("📥 Download Prescription PDF", f, file_name=pdf_file)
     else:
