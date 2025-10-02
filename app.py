@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime
 import streamlit.components.v1 as components
+import urllib.parse
 
 st.set_page_config(page_title="Buddha Clinic - Appointments", page_icon="📅", layout="wide")
 
@@ -21,10 +22,15 @@ with col1:
     gender = st.selectbox("Gender", ["Male", "Female", "Other"])
 
 with col2:
-    mobile = st.text_input("Mobile Number")
+    mobile = st.text_input("Mobile Number (with country code, e.g. 91XXXXXXXXXX)")
     appt_date = st.date_input("Appointment Date", datetime.today())
     appt_time = st.time_input("Appointment Time")
     doctor = st.selectbox("Doctor", ["Dr. Ankur Poddar"])
+
+# Helper: Generate WhatsApp link
+def generate_whatsapp_link(to_number, text):
+    msg = urllib.parse.quote(text)
+    return f"https://wa.me/{to_number}?text={msg}"
 
 if st.button("✅ Book Appointment"):
     if name and mobile:
@@ -47,6 +53,16 @@ if st.button("✅ Book Appointment"):
 
         df.to_excel(APPOINTMENT_FILE, index=False)
         st.success(f"✅ Appointment booked for {name} with {doctor} on {appt_date} at {appt_time}")
+
+        # WhatsApp message
+        msg = f"Hello {name}, your appointment with {doctor} is confirmed on {appt_date} at {appt_time}. - Buddha Clinic"
+        wa_link = generate_whatsapp_link(mobile, msg)
+
+        # Show WhatsApp button
+        st.markdown(f"[📲 Send WhatsApp Confirmation]({wa_link})", unsafe_allow_html=True)
+
+        # 🔄 Refresh calendar
+        st.experimental_rerun()
     else:
         st.error("⚠️ Please enter at least Patient Name and Mobile Number")
 
@@ -56,7 +72,6 @@ st.subheader("📅 Appointment Calendar")
 if os.path.exists(APPOINTMENT_FILE):
     df = pd.read_excel(APPOINTMENT_FILE)
 
-    # Convert to events JSON for FullCalendar
     events = []
     for _, row in df.iterrows():
         events.append({
@@ -64,7 +79,6 @@ if os.path.exists(APPOINTMENT_FILE):
             "start": f"{row['AppointmentDate']}T{row['AppointmentTime']}:00",
         })
 
-    # HTML/JS for FullCalendar
     calendar_html = f"""
     <!DOCTYPE html>
     <html>
@@ -72,7 +86,6 @@ if os.path.exists(APPOINTMENT_FILE):
       <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
       <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
       <script>
-
         document.addEventListener('DOMContentLoaded', function() {{
           var calendarEl = document.getElementById('calendar');
           var calendar = new FullCalendar.Calendar(calendarEl, {{
@@ -96,4 +109,4 @@ if os.path.exists(APPOINTMENT_FILE):
 
     components.html(calendar_html, height=650, scrolling=True)
 else:
-    st.info("No appointments booked yet. Book one to see it on the calendar.")
+    st.info("No appointments booked yet. Book one to
