@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
-import easyocr
+from paddleocr import PaddleOCR
 from PIL import Image
 import re
 import os
 from datetime import datetime
 
-# Initialize EasyOCR reader (English)
-reader = easyocr.Reader(['en'])
+# Initialize PaddleOCR reader (English only)
+ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
 st.title("📄 Pharma Supplier Bill Extractor - Buddha Clinic")
 
@@ -56,12 +56,17 @@ if uploaded_files:
     results = []
 
     for file in uploaded_files:
-        # Load image
-        img = Image.open(file)
+        # Save temporarily
+        with open(file.name, "wb") as f:
+            f.write(file.getbuffer())
 
-        # OCR using EasyOCR
-        result = reader.readtext(img, detail=0)  # detail=0 = only text strings
-        text = "\n".join(result)
+        # OCR using PaddleOCR
+        ocr_result = ocr.ocr(file.name, cls=True)
+        text_lines = []
+        for page in ocr_result:
+            for line in page:
+                text_lines.append(line[1][0])
+        text = "\n".join(text_lines)
 
         # Extract fields
         fields = extract_fields(text)
