@@ -1,16 +1,15 @@
 import streamlit as st
 import pandas as pd
-import pytesseract
+import easyocr
 from PIL import Image
 import re
 import os
 from datetime import datetime
 
-# ====== Configure Tesseract Path (Windows users only) ======
-# Uncomment and update path if needed
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# Initialize EasyOCR reader (English)
+reader = easyocr.Reader(['en'])
 
-st.title("📄 Pharma Supplier Bill Extractor")
+st.title("📄 Pharma Supplier Bill Extractor - Buddha Clinic")
 
 # -------- Helper Function to Extract Fields ----------
 def extract_fields(text):
@@ -60,8 +59,9 @@ if uploaded_files:
         # Load image
         img = Image.open(file)
 
-        # OCR
-        text = pytesseract.image_to_string(img)
+        # OCR using EasyOCR
+        result = reader.readtext(img, detail=0)  # detail=0 = only text strings
+        text = "\n".join(result)
 
         # Extract fields
         fields = extract_fields(text)
