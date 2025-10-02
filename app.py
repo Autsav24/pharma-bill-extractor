@@ -41,19 +41,22 @@ def load_appointments() -> pd.DataFrame:
 def save_appointments(df: pd.DataFrame):
     df.to_excel(APPOINTMENT_FILE, index=False)
 
+def generate_appointment_id(df):
+    if df.empty or df["ID"].dropna().empty:
+        return 1
+    else:
+        return int(df["ID"].dropna().max()) + 1
+
 def generate_patient_id(df):
-    if df.empty or df["PatientID"].isnull().all():
+    if df.empty or df["PatientID"].dropna().empty:
         return "P0001"
     else:
         last_id = df["PatientID"].dropna().iloc[-1]
-        num = int(last_id[1:]) + 1
+        try:
+            num = int(last_id[1:]) + 1
+        except:
+            num = 1
         return f"P{num:04d}"
-
-def generate_appointment_id(df):
-    if df.empty or df["ID"].isnull().all():
-        return 1
-    else:
-        return int(df["ID"].max()) + 1
 
 def save_prescription_pdf(appt, doctor_notes):
     filename = f"prescription_{appt['PatientID']}_{appt['ID']}.pdf"
