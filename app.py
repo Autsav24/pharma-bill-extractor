@@ -192,7 +192,7 @@ if role == "Reception/Staff":
                 st.success("✅ Report uploaded")
 
     # ---- Delete Appointment ----
-    st.subheader("🗑 Delete Appointment")
+    st.subheader("🗑 Update Appointment")
     df = load_appointments()
     if not df.empty:
         st.dataframe(df, use_container_width=True)
@@ -274,5 +274,6 @@ if role == "Doctor":
                 st.dataframe(history[show_cols], use_container_width=True)
             else:
                 st.info("No past history found for this patient.")
+
 
 
