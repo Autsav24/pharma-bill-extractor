@@ -212,6 +212,44 @@ if role == "Reception/Staff":
 
         st.success(f"✅ Appointment booked for {name} ({patient_id}) with {doctor} on {date_str} at {time_str}")
 
+    # ---- Manage Existing Appointments ----
+    st.subheader("🛠 Manage Appointments")
+    df = load_appointments()
+    if not df.empty:
+        search = st.text_input("🔍 Search by name or mobile")
+        if search:
+            df = df[df["Name"].str.contains(search, case=False) | df["Mobile"].astype(str).str.contains(search)]
+
+        st.dataframe(df, use_container_width=True)
+
+        selected = st.selectbox("Select appointment ID to update", df["ID"].astype(str))
+        if selected:
+            appt = df[df["ID"].astype(str) == selected].iloc[0]
+            st.write("Editing:", appt["Name"], "-", appt["AppointmentDate"], appt["AppointmentTime"])
+
+            action = st.radio("Action", ["Cancel", "Reschedule", "Delete"])
+            if action == "Cancel":
+                if st.button("❌ Cancel Appointment"):
+                    df.loc[df["ID"].astype(str) == selected, "Status"] = "Cancelled"
+                    save_appointments(df)
+                    st.success("Appointment cancelled")
+            elif action == "Reschedule":
+                new_date = st.date_input("New Date", datetime.today())
+                new_time = st.time_input("New Time")
+                if st.button("🔄 Reschedule"):
+                    df.loc[df["ID"].astype(str) == selected, "AppointmentDate"] = new_date.strftime("%Y-%m-%d")
+                    df.loc[df["ID"].astype(str) == selected, "AppointmentTime"] = new_time.strftime("%H:%M")
+                    df.loc[df["ID"].astype(str) == selected, "Status"] = "Rescheduled"
+                    save_appointments(df)
+                    st.success("Appointment rescheduled")
+            elif action == "Delete":
+                if st.button("🗑️ Delete Appointment"):
+                    df = df[df["ID"].astype(str) != selected]
+                    save_appointments(df)
+                    st.success("Appointment deleted permanently")
+    else:
+        st.info("No appointments found.")
+
 # ----------------- Doctor Prescription -----------------
 if role == "Doctor":
     st.subheader("📝 Write Prescription")
