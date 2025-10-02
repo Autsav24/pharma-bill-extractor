@@ -109,6 +109,19 @@ def save_prescription_pdf(appt, diagnosis, medicines, doctor_notes):
 # ----------------- Role -----------------
 role = st.radio("👥 Who is using this system?", ["Patient", "Reception/Staff", "Doctor"])
 
+# Password Protection
+if role == "Reception/Staff":
+    pw = st.text_input("Enter Staff Password", type="password")
+    if pw != "staff123":   # <-- change staff password here
+        st.warning("🔒 Enter valid Staff password to continue")
+        st.stop()
+
+if role == "Doctor":
+    pw = st.text_input("Enter Doctor Password", type="password")
+    if pw != "doctor123":   # <-- change doctor password here
+        st.warning("🔒 Enter valid Doctor password to continue")
+        st.stop()
+
 if role == "Doctor":
     selected_doctor = st.selectbox("Select Doctor", ["Dr. Ankur Poddar"])
 else:
