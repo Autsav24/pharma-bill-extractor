@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
-from paddleocr import PaddleOCR
+import easyocr
 from PIL import Image
 import re
 import os
 from datetime import datetime
 
-# ✅ Cache OCR so it initializes only once
+# ✅ Cache OCR so it loads only once
 @st.cache_resource
 def load_ocr():
-    return PaddleOCR(use_angle_cls=True, lang='en')
+    return easyocr.Reader(['en'])
 
-ocr = load_ocr()
+reader = load_ocr()
 
 # Sidebar Navigation
 st.sidebar.title("🏥 Buddha Clinic")
@@ -23,7 +23,6 @@ page = st.sidebar.radio("Select Feature:", ["📄 Bill Extractor", "📅 Appoint
 if page == "📄 Bill Extractor":
     st.title("📄 Pharma Supplier Bill Extractor")
 
-    # -------- Helper Function to Extract Fields ----------
     def extract_fields(text):
         estimate = None
         match_est = re.search(r"Estimate\s*No\.?\s*:? ?(\d+)", text, re.IGNORECASE)
@@ -53,7 +52,6 @@ if page == "📄 Bill Extractor":
             "BuyerName": buyer
         }
 
-    # -------- File Upload Section ----------
     uploaded_files = st.file_uploader(
         "Upload Bill Images (JPG/PNG)", 
         type=["jpg", "jpeg", "png"], 
@@ -62,21 +60,11 @@ if page == "📄 Bill Extractor":
 
     if uploaded_files:
         results = []
-
         for file in uploaded_files:
-            # Save temporarily
-            with open(file.name, "wb") as f:
-                f.write(file.getbuffer())
+            img = Image.open(file)
+            result = reader.readtext(img, detail=0)  # OCR
+            text = "\n".join(result)
 
-            # OCR using PaddleOCR
-            ocr_result = ocr.ocr(file.name, cls=True)
-            text_lines = []
-            for page in ocr_result:
-                for line in page:
-                    text_lines.append(line[1][0])
-            text = "\n".join(text_lines)
-
-            # Extract fields
             fields = extract_fields(text)
             fields["File"] = file.name
             results.append(fields)
@@ -86,7 +74,6 @@ if page == "📄 Bill Extractor":
         st.write("✅ Extracted Data (you can edit if needed)")
         edited_df = st.data_editor(df, num_rows="dynamic")
 
-        # -------- Validation Rules ----------
         errors = []
         for i, row in edited_df.iterrows():
             if row["EstimateNo"] and not str(row["EstimateNo"]).isdigit():
@@ -103,7 +90,6 @@ if page == "📄 Bill Extractor":
             for e in errors:
                 st.write("- " + e)
 
-        # -------- Save to Excel (Append Monthly) ----------
         if st.button("💾 Save to Monthly Excel"):
             if not edited_df.empty:
                 date_str = edited_df.iloc[0]["Date"] or datetime.today().strftime("%d-%m-%Y")
@@ -135,7 +121,6 @@ elif page == "📅 Appointment Booking":
 
     APPOINTMENT_FILE = "appointments.xlsx"
 
-    # --- Appointment Form ---
     with st.form("appointment_form"):
         name = st.text_input("Patient Name")
         age = st.number_input("Age", min_value=0, max_value=120, step=1)
@@ -171,7 +156,6 @@ elif page == "📅 Appointment Booking":
             else:
                 st.error("⚠️ Please enter at least Patient Name and Mobile Number")
 
-    # --- Show Today's Appointments ---
     st.write("### 📋 Today's Appointments")
     if os.path.exists(APPOINTMENT_FILE):
         all_appts = pd.read_excel(APPOINTMENT_FILE)
