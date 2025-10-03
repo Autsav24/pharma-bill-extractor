@@ -223,6 +223,9 @@ if role == "Reception/Staff":
 # =======================================================
 # 👨‍⚕️ DOCTOR SECTION
 # =======================================================
+# =======================================================
+# 👨‍⚕️ DOCTOR SECTION
+# =======================================================
 if role == "Doctor":
     st.subheader("👨‍⚕️ Doctor Dashboard")
     df = load_appointments()
@@ -250,6 +253,8 @@ if role == "Doctor":
                 pres_dir = "prescriptions"
                 os.makedirs(pres_dir, exist_ok=True)
                 pres_file = f"{pres_dir}/{appt['PatientID']}_{datetime.now(IST).strftime('%Y%m%d_%H%M')}_prescription.txt"
+                
+                # Write prescription
                 with open(pres_file, "w") as f:
                     f.write(f"Patient: {appt['Name']} (ID: {appt['PatientID']})\n")
                     f.write(f"Age: {appt['Age']} | Gender: {appt['Gender']}\n")
@@ -264,7 +269,12 @@ if role == "Doctor":
                 new_pres = (str(current_pres) + ";" + pres_file).strip(";") if current_pres else pres_file
                 df.loc[df["ID"] == appt_id, "PrescriptionFiles"] = new_pres
                 save_appointments(df)
-                st.success("✅ Prescription saved")
+
+                # Download link immediately
+                with open(pres_file, "rb") as f:
+                    st.download_button("📥 Download This Prescription", f, file_name=os.path.basename(pres_file))
+
+                st.success("✅ Prescription saved and ready to download")
 
             # ---- Patient History ----
             st.subheader("📖 Patient History")
@@ -272,8 +282,20 @@ if role == "Doctor":
             if not history.empty:
                 show_cols = [c for c in ["AppointmentDate","AppointmentTime","Status","Diagnosis","FollowUpDate","PrescriptionFiles","ReportFiles"] if c in history.columns]
                 st.dataframe(history[show_cols], use_container_width=True)
+
+                # Show prescription files if exist
+                pres_files = history["PrescriptionFiles"].dropna().unique()
+                if pres_files.any():
+                    st.write("📄 Past Prescriptions:")
+                    for files in pres_files:
+                        for fpath in str(files).split(";"):
+                            if os.path.exists(fpath):
+                                with open(fpath, "rb") as f:
+                                    st.download_button(f"📥 {os.path.basename(fpath)}", f, file_name=os.path.basename(fpath))
             else:
                 st.info("No past history found for this patient.")
+
+
 
 
 
