@@ -4,6 +4,9 @@ import os
 import urllib.parse
 from datetime import datetime
 import pytz
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import cm
 
 # ========== CONFIG ==========
 st.set_page_config(page_title="Buddha Clinic - Appointments", page_icon="🏥", layout="wide")
@@ -45,6 +48,74 @@ def generate_ids(df: pd.DataFrame):
         new_id = int(df["ID"].dropna().max()) + 1
     patient_id = f"P{str(new_id).zfill(4)}"
     return new_id, patient_id
+
+# -------- Prescription PDF generator --------
+def generate_prescription_pdf(appt, diagnosis, medicines, followup_date, doctor_notes):
+    pres_dir = "prescriptions"
+    os.makedirs(pres_dir, exist_ok=True)
+    filename = f"{pres_dir}/{appt['PatientID']}_{datetime.now(IST).strftime('%Y%m%d_%H%M')}_prescription.pdf"
+
+    c = canvas.Canvas(filename, pagesize=A4)
+    width, height = A4
+
+    # Header
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(2*cm, height-2*cm, "Buddha Clinic")
+    c.setFont("Helvetica", 12)
+    c.drawString(2*cm, height-2.7*cm, "Dr. Ankur Poddar, MBBS")
+    c.drawString(2*cm, height-3.2*cm, "Contact: +91-9876543210")
+    c.line(2*cm, height-3.5*cm, width-2*cm, height-3.5*cm)
+
+    # Patient Info
+    c.setFont("Helvetica", 11)
+    c.drawString(2*cm, height-4.5*cm, f"Patient: {appt['Name']} (ID: {appt['PatientID']})")
+    c.drawString(2*cm, height-5.2*cm, f"Age: {appt['Age']} | Gender: {appt['Gender']}")
+    c.drawRightString(width-2*cm, height-4.5*cm, f"Height: {appt['Height']} cm | Weight: {appt['Weight']} kg")
+    c.drawRightString(width-2*cm, height-5.2*cm, f"Date: {datetime.now(IST).strftime('%Y-%m-%d %H:%M')}")
+
+    # Diagnosis
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2*cm, height-7*cm, "Diagnosis:")
+    c.setFont("Helvetica", 11)
+    text = c.beginText(2*cm, height-7.7*cm)
+    text.textLines(diagnosis if diagnosis else "N/A")
+    c.drawText(text)
+
+    # Medicines
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2*cm, height-11*cm, "Prescription (℞):")
+    c.setFont("Helvetica", 11)
+    med_text = c.beginText(2.5*cm, height-11.7*cm)
+    if medicines:
+        for med in medicines.split("\n"):
+            med_text.textLine(f"• {med}")
+    else:
+        med_text.textLine("N/A")
+    c.drawText(med_text)
+
+    # Follow-up
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2*cm, 6*cm, "Follow-up Date:")
+    c.setFont("Helvetica", 11)
+    c.drawString(2.5*cm, 5.5*cm, followup_date.strftime("%Y-%m-%d"))
+
+    # Notes
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(2*cm, 4.5*cm, "Doctor Notes:")
+    c.setFont("Helvetica", 11)
+    notes_text = c.beginText(2.5*cm, 4*cm)
+    notes_text.textLines(doctor_notes if doctor_notes else "N/A")
+    c.drawText(notes_text)
+
+    # Footer
+    c.line(2*cm, 2.5*cm, width-2*cm, 2.5*cm)
+    c.setFont("Helvetica-Oblique", 10)
+    c.drawString(2*cm, 2*cm, "This is a computer-generated prescription from Buddha Clinic.")
+    c.setFont("Helvetica", 12)
+    c.drawRightString(width-2*cm, 2*cm, "Doctor's Signature")
+
+    c.save()
+    return filename
 
 # ========== ROLE SELECT ==========
 st.title("🏥 Buddha Clinic - Appointment System")
@@ -171,28 +242,8 @@ if role == "Reception/Staff":
             save_appointments(df)
             st.success(f"✅ Appointment booked for {name} with {doctor} on {appt_date} at {appt_time}")
 
-    # ---- Upload Reports ----
-    st.subheader("📎 Upload Patient Report")
-    df = load_appointments()
-    if not df.empty:
-        patient_choice = st.selectbox("Select Patient", df["Name"].astype(str) + " (" + df["PatientID"].astype(str) + ")")
-        if patient_choice:
-            pid = patient_choice.split("(")[-1].replace(")", "")
-            uploaded_report = st.file_uploader("Upload Report", type=["pdf","jpg","jpeg","png"])
-            if uploaded_report:
-                reports_dir = "reports"
-                os.makedirs(reports_dir, exist_ok=True)
-                filename = f"{reports_dir}/{pid}_{datetime.now(IST).strftime('%Y%m%d_%H%M')}_{uploaded_report.name}"
-                with open(filename, "wb") as f:
-                    f.write(uploaded_report.getbuffer())
-                current_reports = df.loc[df["PatientID"] == pid, "ReportFiles"].values[0]
-                new_reports = (str(current_reports) + ";" + filename).strip(";") if current_reports else filename
-                df.loc[df["PatientID"] == pid, "ReportFiles"] = new_reports
-                save_appointments(df)
-                st.success("✅ Report uploaded")
-
-    # ---- Delete Appointment ----
-    st.subheader("🗑 Update Appointment")
+    # ---- Manage Appointments ----
+    st.subheader("🛠 Manage Appointments")
     df = load_appointments()
     if not df.empty:
         st.dataframe(df, use_container_width=True)
@@ -219,10 +270,26 @@ if role == "Reception/Staff":
             save_appointments(df)
             st.success("Appointment deleted")
 
+    # ---- Upload Reports ----
+    st.subheader("📎 Upload Patient Report")
+    df = load_appointments()
+    if not df.empty:
+        patient_choice = st.selectbox("Select Patient", df["Name"].astype(str) + " (" + df["PatientID"].astype(str) + ")")
+        if patient_choice:
+            pid = patient_choice.split("(")[-1].replace(")", "")
+            uploaded_report = st.file_uploader("Upload Report", type=["pdf","jpg","jpeg","png"])
+            if uploaded_report:
+                reports_dir = "reports"
+                os.makedirs(reports_dir, exist_ok=True)
+                filename = f"{reports_dir}/{pid}_{datetime.now(IST).strftime('%Y%m%d_%H%M')}_{uploaded_report.name}"
+                with open(filename, "wb") as f:
+                    f.write(uploaded_report.getbuffer())
+                current_reports = df.loc[df["PatientID"] == pid, "ReportFiles"].values[0]
+                new_reports = (str(current_reports) + ";" + filename).strip(";") if current_reports else filename
+                df.loc[df["PatientID"] == pid, "ReportFiles"] = new_reports
+                save_appointments(df)
+                st.success("✅ Report uploaded")
 
-# =======================================================
-# 👨‍⚕️ DOCTOR SECTION
-# =======================================================
 # =======================================================
 # 👨‍⚕️ DOCTOR SECTION
 # =======================================================
@@ -250,31 +317,17 @@ if role == "Doctor":
                 df.loc[df["ID"] == appt_id, "Status"] = "Seen"
                 df.loc[df["ID"] == appt_id, "FollowUpDate"] = followup_date.strftime("%Y-%m-%d")
 
-                pres_dir = "prescriptions"
-                os.makedirs(pres_dir, exist_ok=True)
-                pres_file = f"{pres_dir}/{appt['PatientID']}_{datetime.now(IST).strftime('%Y%m%d_%H%M')}_prescription.txt"
-                
-                # Write prescription
-                with open(pres_file, "w") as f:
-                    f.write(f"Patient: {appt['Name']} (ID: {appt['PatientID']})\n")
-                    f.write(f"Age: {appt['Age']} | Gender: {appt['Gender']}\n")
-                    f.write(f"Height: {appt['Height']} cm | Weight: {appt['Weight']} kg\n")
-                    f.write(f"Doctor: {appt['Doctor']}\n")
-                    f.write(f"Date: {datetime.now(IST).strftime('%Y-%m-%d %H:%M')}\n\n")
-                    f.write(f"Diagnosis:\n{diagnosis}\n\n")
-                    f.write("Medicines:\n" + medicines.replace("\n","; ") + "\n\n")
-                    f.write(f"Doctor Notes:\n{doctor_notes}\n")
+                pdf_file = generate_prescription_pdf(appt, diagnosis, medicines, followup_date, doctor_notes)
 
                 current_pres = df.loc[df["ID"] == appt_id, "PrescriptionFiles"].values[0]
-                new_pres = (str(current_pres) + ";" + pres_file).strip(";") if current_pres else pres_file
+                new_pres = (str(current_pres) + ";" + pdf_file).strip(";") if current_pres else pdf_file
                 df.loc[df["ID"] == appt_id, "PrescriptionFiles"] = new_pres
                 save_appointments(df)
 
-                # Download link immediately
-                with open(pres_file, "rb") as f:
-                    st.download_button("📥 Download This Prescription", f, file_name=os.path.basename(pres_file))
+                with open(pdf_file, "rb") as f:
+                    st.download_button("📥 Download Prescription PDF", f, file_name=os.path.basename(pdf_file))
 
-                st.success("✅ Prescription saved and ready to download")
+                st.success("✅ Prescription saved as PDF and ready to download")
 
             # ---- Patient History ----
             st.subheader("📖 Patient History")
@@ -283,7 +336,7 @@ if role == "Doctor":
                 show_cols = [c for c in ["AppointmentDate","AppointmentTime","Status","Diagnosis","FollowUpDate","PrescriptionFiles","ReportFiles"] if c in history.columns]
                 st.dataframe(history[show_cols], use_container_width=True)
 
-                # Show prescription files if exist
+                # Show past prescriptions
                 pres_files = history["PrescriptionFiles"].dropna().unique()
                 if pres_files.any():
                     st.write("📄 Past Prescriptions:")
@@ -292,10 +345,15 @@ if role == "Doctor":
                             if os.path.exists(fpath):
                                 with open(fpath, "rb") as f:
                                     st.download_button(f"📥 {os.path.basename(fpath)}", f, file_name=os.path.basename(fpath))
+
+                # Show past reports
+                rep_files = history["ReportFiles"].dropna().unique()
+                if rep_files.any():
+                    st.write("📑 Uploaded Reports:")
+                    for files in rep_files:
+                        for fpath in str(files).split(";"):
+                            if os.path.exists(fpath):
+                                with open(fpath, "rb") as f:
+                                    st.download_button(f"📎 {os.path.basename(fpath)}", f, file_name=os.path.basename(fpath))
             else:
                 st.info("No past history found for this patient.")
-
-
-
-
-
